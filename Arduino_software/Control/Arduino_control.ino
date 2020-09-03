@@ -78,10 +78,18 @@ void setStepper(int target)
 
 void spinUpServo() 
 {
-    int speedValue = 1800;
+    const int startValue = 1000;
+    int targetValue = 1800;
 
-    Servo1.writeMicroseconds(speedValue);
-    Servo2.writeMicroseconds(speedValue);
+    int linearAcceleration(int startValue, int targetValue)
+    {
+        for(int i = startValue; i < targetValue + 1; i++)
+        {
+            //Maybe some kind of delay here?
+            Servo1.writeMicroseconds(i);
+            Servo2.writeMicroseconds(i);
+        }    
+    }
 }
 
 //Motors used to fire the puck
