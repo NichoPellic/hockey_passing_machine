@@ -1,7 +1,7 @@
-#include <servo.h>
+#include <Servo.h>
 
-const int servo1Pin = 3
-const int servo2Pin = 4
+const int servo1Pin = 3;
+const int servo2Pin = 4;
 
 const int potmeter = A0;
 
