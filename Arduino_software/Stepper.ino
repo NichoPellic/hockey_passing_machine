@@ -17,31 +17,54 @@ const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
 //Setup function for stepper motor
 Stepper steppermotor(STEPS_PER_REV, 8, 10, 9, 11);
 
-//Starts our aim at 0 degrees
-int AimDirection = 0;
+const byte armingSingal = 2;
  
-void setup(){
-// Nothing  (Stepper.h liberary sets pins as outputs)
+void setup()
+{
+    pinMode(armingSingal, INPUT);
+    Serial.begin(115200);
 }
  
-void loop(){
-int Coordinates = GetCoordinates();
-  while (Coordinates != AimDirection){
-    if (Coordinates < AimDirection){
-      steppermotor.setSpeed(500);
-      steppermotor.step(-StepOneDeg);
-      AimDirection -= 1;
-    }
-    if (Coordinates > AimDirection){
-      steppermotor.setSpeed(500);
-      steppermotor.step(StepOneDeg);
-      AimDirection += 1;
-    }
-  }
-  delay(1000);
+void loop()
+{
+    int input = 0;
+
+    while(Serial.available() > 0)
+    {
+        input = Serial.parseInt();
+
+        if(input > 0 && input < 255) setServo(input);        
+    }    
 }
 
-int GetCoordinates(){
-  int deg = 60;
-  return deg; 
+//Stepper that for yaw
+void setStepper(int target)
+{
+    //int Coordinates = GetCoordinates();
+    int Coordinates = target
+    int aimDirection = 0;
+
+    //Needs to remove the while loop so the program isn't stuck trying to set the position
+    while (Coordinates != aimDirection)
+    {
+        if (Coordinates < aimDirection)
+        {
+            steppermotor.setSpeed(500);
+            steppermotor.step(-StepOneDeg);
+            aimDirection -= 1;
+        }
+        if (Coordinates > aimDirection)
+        {
+            steppermotor.setSpeed(500);
+            steppermotor.step(StepOneDeg);
+            aimDirection += 1;
+        }
+    }
+    delay(1000);
+}
+
+//Motors used to fire the puck
+void steMotorSpeed()
+{
+    
 }
