@@ -22,6 +22,10 @@ int potmeter = A0;
 bool manualMode = false;
 bool escCalibrated = false;
 
+unsigned long previousMillis = 0;
+
+const int printDelay(1000);
+
 //Stepper setup
 //Number of steps per internal motor revolution 
 const float STEPS_PER_REV = 32; 
@@ -105,7 +109,7 @@ void loop()
             while(true)
             {
                 if(spinMotors) setMotorSpeed(0);     
-                if(runStepper) runStepper = !setStepper(degrees);           
+                //if(runStepper) runStepper = !setStepper(degrees);           
 
                 if(Serial.available() > 0)               
                 {
@@ -167,7 +171,7 @@ void loop()
 }
 
 //Stepper for yaw
-bool setStepper(int target)
+void setStepper(int target)
 {
     //Returns true if the stepper has reached target value
     bool returnVal = false;
@@ -180,18 +184,16 @@ bool setStepper(int target)
     {
         steppermotor.setSpeed(500);
         steppermotor.step(-degNeeded);
-        stepperPosition = target;
+        //stepperPosition = target;
     }
     else if (target > stepperPosition)
     {
         steppermotor.setSpeed(500);
         steppermotor.step(degNeeded);
-        stepperPosition = target;
+        //stepperPosition = target;
     }
 
-    if((stepperPosition == target) && (armingSignal)) firePuck();
-   
-    return returnVal;
+    if((armingSignal)) firePuck();   
 }
 
 void setMotorSpeed(int targetValue) 
@@ -203,9 +205,14 @@ void setMotorSpeed(int targetValue)
         int speedValue = map(analogRead(potmeter), 0 , 1024, 1000, 2000);
         ESC1.writeMicroseconds(speedValue);
         ESC2.writeMicroseconds(speedValue);
-        Serial.print("ESC speedvalue: ");
-        Serial.print(speedValue/100);
-        Serial.println("%");
+
+        if(millis() - previousMillis >= printDelay)
+        {
+            previousMillis = millis();
+            Serial.print("ESC speedvalue: ");
+            Serial.print((speedValue-1000)/10);
+            Serial.println("%");
+        }        
     }
 
     else
