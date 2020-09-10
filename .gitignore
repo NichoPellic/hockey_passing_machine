@@ -2,3 +2,5 @@ Image_processing_python/__pycache__/support_functions.cpython-36.pyc
 Image_processing_python/__pycache__/send_data.cpython-36.pyc
 Image_processing_python/yolov3-tiny.weights
 Image_processing_python/yolov3.weights
+.vscode/arduino.json
+.vscode/c_cpp_properties.json
