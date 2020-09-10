@@ -180,11 +180,13 @@ bool setStepper(int target)
     {
         steppermotor.setSpeed(500);
         steppermotor.step(-degNeeded);
+        stepperPosition = target;
     }
     else if (target > stepperPosition)
     {
         steppermotor.setSpeed(500);
         steppermotor.step(degNeeded);
+        stepperPosition = target;
     }
 
     if((stepperPosition == target) && (armingSignal)) firePuck();
