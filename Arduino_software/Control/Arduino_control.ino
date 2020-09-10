@@ -115,29 +115,33 @@ void loop()
 
                     else if(input == 2) firePuck();
 
-                    else if(input == 3) spinMotors = !spinMotors;
+                    else if(input == 3) 
+                    
+                    {
+                        spinMotors = !spinMotors;
+
+                        if(spinMotors) Serial.println("Toggled ESC on");
+
+                        else Serial.println("Toggled ESC off"); 
+                    }
+
 
                     else if(input == 4)
                     {
-                        Serial.println("Enter target value in degrees: ");
+                        Serial.print("Enter target value in degrees: ");
 
                         while(!Serial.available());
 
                         degrees = Serial.parseInt();
 
+                        Serial.println(degrees);
+
                         if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit)) runStepper = true;                    
                     }
 
-                    else if(input == 0) ; //Do nothing
+                    else if(input == 0) ; //Do nothing, a bug in VS Code sends extra data over the serial line
 
-                    else Serial.println("Please enter a valid value!");
-
-                    if(input == 0)
-                    {
-                        if(spinMotors) Serial.println("Toggled ESC on");
-
-                        else Serial.println("Toggled ESC off");  
-                    }                                   
+                    else Serial.println("Please enter a valid value!");                             
                 }                
             }
         }   
