@@ -1,99 +1,233 @@
+//Puck Buddy V0.1
+
 #include <Stepper.h>
 #include <Servo.h>
 
-// Number of steps per internal motor revolution 
+//I/O Pins
+const byte limitSwitch1 = 2;
+const byte limitSwitch2 = 3;
+const byte signalLed = 4;
+const byte esc1Pin = 5;
+const byte esc2Pin = 6;
+const byte armingSignal = 7;
+const byte firingRelay = 8;
+const byte stepperPin1 = 10;
+const byte stepperPin2 = 11;
+const byte stepperPin3 = 12;
+const byte stepperPin4 = 13;
+
+//Analog Inputs
+int potmeter = A0;
+
+bool manualMode = false;
+
+//Stepper setup
+//Number of steps per internal motor revolution 
 const float STEPS_PER_REV = 32; 
  
-//  Amount of Gear Reduction
+//Amount of Gear Reduction
 const float GEAR_RED = 64;
  
-// Number of steps per geared output rotation
+//Number of steps per geared output rotation
 const float STEPS_PER_OUT_REV = STEPS_PER_REV * GEAR_RED;
  
-// Number of steps to turn one degree
+//Number of steps to turn one degree
 const float STEPS_PER_DEG_OUT_REV = STEPS_PER_OUT_REV / 360;
 
-// Integer value for turning one degree
+//Integer value for turning one degree
 const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
- 
+
 //Setup function for stepper motor
-Stepper steppermotor(STEPS_PER_REV, 8, 10, 9, 11);
+Stepper steppermotor(STEPS_PER_REV, stepperPin1, stepperPin2, stepperPin3, stepperPin4);
 
-const byte armingSignal = 2;
+const byte lowerDegreesLimit = 0;
+const byte highestDegreesLimit = 60;
 
-// Pin numbers used for servo controll
-const int servo1Pin = 3;
-const int servo2Pin = 5;
+//Current stepper position
+byte stepperPosition = 0;
 
-// Creating servo objects
-Servo Servo1;
-Servo Servo2;
+//Current speed sent to the ESC's
+int currentMotorSpeed = 0;
+
+//Creating servo objects
+Servo ESC1;
+Servo ESC2;
  
 void setup()
 {
+    //The delay allows the terminal to start reading the data
+    delay(1000);
+    //Setup I/O pins
     pinMode(armingSignal, INPUT);
-    
-    Servo1.attach(servo1Pin);
-    Servo2.attach(servo2Pin);
-    Servo1.writeMicroseconds(1100);
-    Servo2.writeMicroseconds(1100);
+    pinMode(signalLed, OUTPUT);
+    pinMode(firingRelay, OUTPUT);
 
-    Serial.begin(115200);
+    //Attach servo objects to pins
+    ESC1.attach(esc1Pin);
+    ESC2.attach(esc2Pin);
+    
+    Serial.begin(115200);  
+    
 }
  
 void loop()
 {
     int input = 0;
 
+    Serial.println("Select mode for Arduino");
+    Serial.println("To control from terminal enter    (1)");   
+    Serial.println("For the Arduino to run auto enter (2)");   
+
+    while(!Serial.available());
+
     while(Serial.available() > 0)
     {
         input = Serial.parseInt();
 
-        if(input > 0 && input < 255) setServo(input);        
+        //Controlled from a terminal
+        if(input == 1)
+        {
+            input = 0;
+            Serial.println("Arduino in manual mode!");
+            Serial.println("Enter (1) to exit manual mode");
+            Serial.println("Enter (2) to activate firing mechanisme");
+            Serial.println("Enter (3) to toogle ESC");
+            Serial.println("Enter (4) to set target direction");
+
+            manualMode = true;
+
+            int degrees = 0;
+            bool spinMotors = false;
+            bool runStepper = false;            
+
+            while(true)
+            {
+                if(spinMotors) setMotorSpeed(0);     
+                if(runStepper) runStepper = !setStepper(degrees);           
+
+                if(Serial.available() > 0)               
+                {
+                    input = Serial.parseInt();
+
+                    //Maybe replace with a switch statement?
+                    //Would then have to redo while() loop
+                    if(input == 1) break;
+
+                    else if(input == 2) firePuck();
+
+                    else if(input == 3) spinMotors = !spinMotors;
+
+                    else if(input == 4)
+                    {
+                        Serial.println("Enter target value in degrees: ");
+
+                        while(!Serial.available());
+
+                        degrees = Serial.parseInt();
+
+                        if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit)) runStepper = true;                    
+                    }
+
+                    else if(input == 0) ; //Do nothing
+
+                    else Serial.println("Please enter a valid value!");
+
+                    if(input == 0)
+                    {
+                        if(spinMotors) Serial.println("Toggled ESC on");
+
+                        else Serial.println("Toggled ESC off");  
+                    }                                   
+                }                
+            }
+        }   
+
+        //Automatically controlled
+        else if(input == 2)  
+        {
+            input = 0;
+            Serial.println("Arduino in auto mode!");
+
+            while(true)
+            {
+                if(Serial.available() > 0)
+                {
+                    input = Serial.parseInt();
+                    
+                    //if(input < 100 && input > 0) setStepper(input);               
+                }
+            }            
+        }  
     }    
 }
 
-//Stepper that for yaw
-void setStepper(int target)
+//Stepper for yaw
+bool setStepper(int target)
 {
-    // Coordinates is the value where the target is standing
-    int Coordinates = target;
-    // aimDirection is the way the machine is aiming now
-    int aimDirection = 0;
-    // Absoulute value of degrees needed to reach target
-    int degNeeded = abs(Coordinates - aimDirection);
+    //Returns true if the stepper has reached target value
+    bool returnVal = false;
+   
+    //Absoulute value of degrees needed to reach target
+    int degNeeded = abs(target - stepperPosition);
 
-    // Funcktion for aiming the machine
-    if (Coordinates < aimDirection)
+    // Function for aiming the machine
+    if (target < stepperPosition)
     {
         steppermotor.setSpeed(500);
         steppermotor.step(-degNeeded);
     }
-    else if (Coordinates > aimDirection)
+    else if (target > stepperPosition)
     {
         steppermotor.setSpeed(500);
         steppermotor.step(degNeeded);
     }
+
+    if((stepperPosition == target) && (armingSignal)) firePuck();
+   
+    return returnVal;
 }
 
-void spinUpServo() 
+void setMotorSpeed(int targetValue) 
 {
-    const int startValue = 1000;
-    int targetValue = 1800;
-
-    int linearAcceleration(int startValue, int targetValue)
+    if(manualMode)
     {
-        for(int i = startValue; i < targetValue + 1; i++)
-        {
-            //Maybe some kind of delay here?
-            Servo1.writeMicroseconds(i);
-            Servo2.writeMicroseconds(i);
-        }    
+        int speedValue = map(analogRead(potmeter), 0 , 1024, 1000, 2000);
+        ESC1.writeMicroseconds(speedValue);
+        ESC2.writeMicroseconds(speedValue);
+    }
+
+    else
+    {        
+        ESC1.writeMicroseconds(targetValue);
+        ESC2.writeMicroseconds(targetValue);           
     }
 }
 
-//Motors used to fire the puck
-void setMotorSpeed()
+void firePuck()
 {
-    
+    if(manualMode)
+    {
+        Serial.println("Firing puck in manual mode");
+        digitalWrite(firingRelay, HIGH);
+        delay(2000); //For test purpose
+        digitalWrite(firingRelay, LOW);
+    }
+
+    else
+    {
+        if(currentMotorSpeed >= 1000)
+        {
+            digitalWrite(firingRelay, HIGH);
+            delay(500);
+            digitalWrite(firingRelay, LOW);
+        }
+    }    
+}
+
+void clearBuffer()
+{
+    while(Serial.available())
+    {
+        char c = Serial.read();
+    }
 }
