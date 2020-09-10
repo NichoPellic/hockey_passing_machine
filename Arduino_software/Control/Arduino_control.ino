@@ -20,6 +20,7 @@ const byte stepperPin4 = 13;
 int potmeter = A0;
 
 bool manualMode = false;
+bool escCalibrated = false;
 
 //Stepper setup
 //Number of steps per internal motor revolution 
@@ -56,6 +57,7 @@ Servo ESC2;
 void setup()
 {
     //The delay allows the terminal to start reading the data
+    //Applies to VS Code due to the serial monitor using some time before reading the input buffer
     delay(1000);
     //Setup I/O pins
     pinMode(armingSignal, INPUT);
@@ -125,7 +127,6 @@ void loop()
                         else Serial.println("Toggled ESC off"); 
                     }
 
-
                     else if(input == 4)
                     {
                         Serial.print("Enter target value in degrees: ");
@@ -193,11 +194,16 @@ bool setStepper(int target)
 
 void setMotorSpeed(int targetValue) 
 {
+    if(!escCalibrated) calibrateESC();
+
     if(manualMode)
     {
         int speedValue = map(analogRead(potmeter), 0 , 1024, 1000, 2000);
         ESC1.writeMicroseconds(speedValue);
         ESC2.writeMicroseconds(speedValue);
+        Serial.print("ESC speedvalue: ");
+        Serial.print(speedValue/100);
+        Serial.println("%");
     }
 
     else
@@ -228,10 +234,20 @@ void firePuck()
     }    
 }
 
-void clearBuffer()
-{
-    while(Serial.available())
-    {
-        char c = Serial.read();
-    }
+void calibrateESC()
+{    
+    //Set minimum range
+    ESC1.writeMicroseconds(1000);
+    ESC2.writeMicroseconds(1000);
+    delay(10);
+    //Set maximum range
+    ESC1.writeMicroseconds(2000);
+    ESC2.writeMicroseconds(2000);
+    delay(10);
+    
+    //Sets ESC to minimum speed
+    ESC1.writeMicroseconds(1000);
+    ESC2.writeMicroseconds(1000);
+
+    escCalibrated = true;
 }
