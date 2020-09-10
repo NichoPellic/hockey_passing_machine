@@ -1,15 +1,18 @@
+#Puck buddy v0.1
+
 import cv2
 import numpy as np
 import send_data
 import support_functions
 
 #Add movement threashold to avoid jitter in the x values
-arduino = send_data.ConnectDevice("COM5")
+global arduino 
+arduino = send_data.ConnectDevice(send_data.GetSerialPorts())
 lastxValue = 0
-xValueDeadzone = 10 #Should probably be proportinal to video input width
-
 videoHeight = 720
 videoWidht = 1280
+xValueDeadzone = 10 #Should probably be proportinal to video input width
+
 
 classesFile = r'C:\Users\Nicholas\source\repos\hockey\Image_processing_python\coco_classes.txt'
 classNames = []
@@ -39,7 +42,7 @@ net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 confidenceThreshold = 0.8
 nmsThreshold = 0.3
 
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture(1)
 cap.set(3, videoWidht)
 cap.set(4, videoHeight)
 whT = 320
@@ -77,11 +80,13 @@ def findObjects(outputs, img, lastxValue):
     #Checks if the object has moved enough to update the control data sent to the stepper
     #Add check to see if the target is a person
     #Need to convert the xValue into degrees
-    if(((lastxValue - xValueDeadzone) > xValue) or ((lastxValue + xValueDeadzone) < xValue)):
-        if(xValue != 0):
-            send_data.SendData(arduino, support_functions.MapValue(xValue, 0, videoWidht, 0, 100))
-            print(send_data.ReadData(arduino))
-            lastxValue = xValue
+    if(arduino is not None):
+        if(((lastxValue - xValueDeadzone) > xValue) or ((lastxValue + xValueDeadzone) < xValue)):
+            if(xValue != 0):
+                send_data.SendData(arduino, support_functions.MapValue(xValue, 0, videoWidht, 0, 100))
+                #print(send_data.ReadData(arduino))
+                lastxValue = xValue   
+        
 
     indicies = cv2.dnn.NMSBoxes(bbox, confValues, confidenceThreshold, nmsThreshold)
 
@@ -121,5 +126,5 @@ def main():
         if(cv2.waitKey(1) & 0xff == ord('q')):
             break
 
-
+#Program to run
 main()

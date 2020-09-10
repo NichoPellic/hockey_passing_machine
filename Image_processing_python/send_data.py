@@ -1,4 +1,5 @@
 import serial
+import serial.tools.list_ports
 import time
 
 def ConnectDevice(comPort):    
@@ -12,19 +13,29 @@ def ConnectDevice(comPort):
 
 #Returns a list of connected serial devices
 def GetSerialPorts():
-    ports = ["COM%s" % (i + 1) for i in range(10)]
     results = []
+    comPort =""
 
-    for port in ports:
-        try:
-            device = serial.Serial(port)
- #          port =  port + " - " + str(device.name) #Redundant as device.name also returns COM + number
-            device.close()
-            results.append(port)
-        except(OSError, serial.SerialException):
-            pass
+    if(False):
+        ports = ["COM%s" % (i + 1) for i in range(10)]
+
+        for port in ports:
+            try:
+                device = serial.Serial(port)
+    #          port =  port + " - " + str(device.name) #Redundant as device.name also returns COM + number
+                device.close()
+                results.append(port)
+            except(OSError, serial.SerialException):
+                pass
     
-    return results
+    else:   
+        results = serial.tools.list_ports.comports()
+
+    for port in results:
+        if("Arduino" in port.description):
+            comPort = port.device
+    
+    return comPort
 
 #Returns true if the data was sent succsessfully
 def SendData(device, data):

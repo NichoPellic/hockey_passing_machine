@@ -52,7 +52,8 @@ def findAngle(velocity, rangeToTarget, targetHeight = 0):
             yValue = (math.sin(math.radians(deg))* velocity * sec) + (0.5*ay*sec**2) 
             time = sec
 
-            if(xValue >= rangeToTarget):                
+            if(xValue >= rangeToTarget):      
+                #Might overshoot, if that's the case it needs to correct the data          
                 break
 
             if(yValue <= targetHeight and sec != 0):
@@ -86,6 +87,6 @@ def calcPuckOnIce(velocity, rangeToTarget, degrees, flightTime):
     xValues.append(rangeToTarget)
     yValues.append(0)
 
-findAngle(10, goalLine, 0)
+findAngle(48, goalLine, 0)
 plt.plot(xValues, yValues)
 plt.show()    

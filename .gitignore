@@ -4,3 +4,4 @@ Image_processing_python/yolov3-tiny.weights
 Image_processing_python/yolov3.weights
 .vscode/arduino.json
 .vscode/c_cpp_properties.json
+Image_processing_python/testing.py
