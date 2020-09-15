@@ -81,8 +81,7 @@ void setup()
     //Set speed stepper
     steppermotor.setSpeed(5);
     
-    Serial.begin(115200);  
-    
+    Serial.begin(115200);      
 }
  
 void loop()
