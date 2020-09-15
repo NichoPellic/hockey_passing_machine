@@ -45,11 +45,11 @@ const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
 //Setup function for stepper motor
 Stepper steppermotor(STEPS_PER_REV, stepperPin1, stepperPin2, stepperPin3, stepperPin4);
 
-const byte lowerDegreesLimit = 0;
-const byte highestDegreesLimit = 60;
+const int lowerDegreesLimit = 0;
+const int highestDegreesLimit = 6000;
 
 //Current stepper position
-byte stepperPosition = 0;
+int stepperPosition = 0;
 
 //Current speed sent to the ESC's
 int currentMotorSpeed = 0;
@@ -71,6 +71,9 @@ void setup()
     //Attach servo objects to pins
     ESC1.attach(esc1Pin);
     ESC2.attach(esc2Pin);
+
+    //Set speed stepper
+    steppermotor.setSpeed(1000);
     
     Serial.begin(115200);  
     
@@ -109,7 +112,7 @@ void loop()
             while(true)
             {
                 if(spinMotors) setMotorSpeed(0);     
-                //if(runStepper) runStepper = !setStepper(degrees);           
+                if(runStepper) setStepper(degrees);           
 
                 if(Serial.available() > 0)               
                 {
@@ -141,7 +144,10 @@ void loop()
 
                         Serial.println(degrees);
 
-                        if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit)) runStepper = true;                    
+                        if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit)) 
+                        {
+                          runStepper = true;                   
+                        }
                     }
 
                     else if(input == 0) ; //Do nothing, a bug in VS Code sends extra data over the serial line
@@ -173,27 +179,25 @@ void loop()
 //Stepper for yaw
 void setStepper(int target)
 {
-    //Returns true if the stepper has reached target value
-    bool returnVal = false;
-   
     //Absoulute value of degrees needed to reach target
     int degNeeded = abs(target - stepperPosition);
 
     // Function for aiming the machine
     if (target < stepperPosition)
     {
-        steppermotor.setSpeed(500);
-        steppermotor.step(-degNeeded);
-        //stepperPosition = target;
+        steppermotor.step(-1);
+        stepperPosition -= 1;
     }
     else if (target > stepperPosition)
     {
-        steppermotor.setSpeed(500);
-        steppermotor.step(degNeeded);
-        //stepperPosition = target;
+        steppermotor.step(1);
+        stepperPosition += 1;
+        Serial.println(stepperPosition);
     }
+    
+   
 
-    if((armingSignal)) firePuck();   
+    if((armingSignal)) firePuck();  
 }
 
 void setMotorSpeed(int targetValue) 
@@ -226,9 +230,9 @@ void firePuck()
 {
     if(manualMode)
     {
-        Serial.println("Firing puck in manual mode");
+        //Serial.println("Firing puck in manual mode");
         digitalWrite(firingRelay, HIGH);
-        delay(2000); //For test purpose
+        //delay(2000); //For test purpose
         digitalWrite(firingRelay, LOW);
     }
 
