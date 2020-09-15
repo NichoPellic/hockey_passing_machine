@@ -6,7 +6,10 @@ def ConnectDevice(comPort):
     try:
         arduino = serial.Serial(port=comPort, baudrate=115200, timeout=0)
         print("Succsesfully connected to device at " + comPort + ". Sleeping for 1 seconds to let the controller reset")
-        time.sleep(1) #Allow the Arduino to reset 
+        time.sleep(4) #Allow the Arduino to reset and boot up
+        msg = "2" 
+        arduino.write(msg.encode('utf-8'))
+        ReadData(arduino)
         return arduino
     except:
         print("Unable to connect to controller!")
@@ -57,7 +60,7 @@ def SendData(device, data):
 def ReadData(device):
     if device is not None:
         if(device.inWaiting() > 0):
-            msg = device.readline()
+            msg = device.readlines()
             return msg.decode("utf-8")
         else:
             return "No data in input buffer"

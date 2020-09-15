@@ -5,7 +5,7 @@
 
 //I/O Pins
 const byte limitSwitch1 = 2;
-const byte limitSwitch2 = 3;
+const byte batterPower = 3;
 const byte signalLed = 4;
 const byte esc1Pin = 5;
 const byte esc2Pin = 6;
@@ -42,14 +42,20 @@ const float STEPS_PER_DEG_OUT_REV = STEPS_PER_OUT_REV / 360;
 //Integer value for turning one degree
 const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
 
-//Setup function for stepper motor
-Stepper steppermotor(STEPS_PER_REV, stepperPin1, stepperPin2, stepperPin3, stepperPin4);
+//Lost steps per degree
+const float LOST_STEPS= STEPS_PER_DEG_OUT_REV - StepOneDeg;
 
+//Setup function for stepper motor
+Stepper steppermotor(STEPS_PER_OUT_REV, stepperPin1, stepperPin3, stepperPin2, stepperPin4);
+    
 const int lowerDegreesLimit = 0;
 const int highestDegreesLimit = 6000;
 
 //Current stepper position
 int stepperPosition = 0;
+
+//Compensate for float to int conversion
+int additionalSteps = 0;
 
 //Current speed sent to the ESC's
 int currentMotorSpeed = 0;
@@ -73,7 +79,7 @@ void setup()
     ESC2.attach(esc2Pin);
 
     //Set speed stepper
-    steppermotor.setSpeed(1000);
+    steppermotor.setSpeed(5);
     
     Serial.begin(115200);  
     
@@ -97,6 +103,7 @@ void loop()
         if(input == 1)
         {
             input = 0;
+            digitalWrite(signalLed, LOW);
             Serial.println("Arduino in manual mode!");
             Serial.println("Enter (1) to exit manual mode");
             Serial.println("Enter (2) to activate firing mechanisme");
@@ -106,13 +113,14 @@ void loop()
             manualMode = true;
 
             int degrees = 0;
+            int steps = 0;
             bool spinMotors = false;
             bool runStepper = false;            
 
             while(true)
             {
                 if(spinMotors) setMotorSpeed(0);     
-                if(runStepper) setStepper(degrees);           
+                if(runStepper) setStepper(steps);  
 
                 if(Serial.available() > 0)               
                 {
@@ -144,10 +152,12 @@ void loop()
 
                         Serial.println(degrees);
 
-                        if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit)) 
+                        if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
                         {
-                          runStepper = true;                   
-                        }
+                            runStepper = true;
+                            steps = degrees * StepOneDeg;
+                            additionalSteps = LOST_STEPS * degrees;
+                        }   
                     }
 
                     else if(input == 0) ; //Do nothing, a bug in VS Code sends extra data over the serial line
@@ -160,6 +170,7 @@ void loop()
         //Automatically controlled
         else if(input == 2)  
         {
+            digitalWrite(signalLed, HIGH);
             input = 0;
             Serial.println("Arduino in auto mode!");
 
@@ -169,7 +180,7 @@ void loop()
                 {
                     input = Serial.parseInt();
                     
-                    //if(input < 100 && input > 0) setStepper(input);               
+                    if(input < 100 && input > 0) setStepper(input);               
                 }
             }            
         }  
@@ -178,26 +189,20 @@ void loop()
 
 //Stepper for yaw
 void setStepper(int target)
-{
-    //Absoulute value of degrees needed to reach target
-    int degNeeded = abs(target - stepperPosition);
-
+{       
     // Function for aiming the machine
-    if (target < stepperPosition)
-    {
+    if (target + additionalSteps < stepperPosition)
+    {        
         steppermotor.step(-1);
         stepperPosition -= 1;
     }
-    else if (target > stepperPosition)
+    else if (target + additionalSteps > stepperPosition)
     {
-        steppermotor.step(1);
-        stepperPosition += 1;
-        Serial.println(stepperPosition);
+        steppermotor.step(1);µ
+        stepperPosition += 1;        
     }
-    
-   
 
-    if((armingSignal)) firePuck();  
+    if(armingSignal && target == stepperPosition) firePuck();  
 }
 
 void setMotorSpeed(int targetValue) 
@@ -248,7 +253,8 @@ void firePuck()
 }
 
 void calibrateESC()
-{    
+{   
+    Serial.println("Calibrating ESC..."); 
     //Set minimum range
     ESC1.writeMicroseconds(1000);
     ESC2.writeMicroseconds(1000);
@@ -263,4 +269,6 @@ void calibrateESC()
     ESC2.writeMicroseconds(1000);
 
     escCalibrated = true;
+
+    Serial.println("ESC calibrated!");
 }
