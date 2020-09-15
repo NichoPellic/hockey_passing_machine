@@ -43,7 +43,7 @@ const float STEPS_PER_DEG_OUT_REV = STEPS_PER_OUT_REV / 360;
 const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
 
 //Setup function for stepper motor
-Stepper steppermotor(STEPS_PER_REV, stepperPin1, stepperPin2, stepperPin3, stepperPin4);
+Stepper steppermotor(STEPS_PER_OUT_REV, stepperPin1, stepperPin3, stepperPin2, stepperPin4);
 
 const int lowerDegreesLimit = 0;
 const int highestDegreesLimit = 6000;
@@ -73,7 +73,7 @@ void setup()
     ESC2.attach(esc2Pin);
 
     //Set speed stepper
-    steppermotor.setSpeed(1000);
+    steppermotor.setSpeed(15);
     
     Serial.begin(115200);  
     
@@ -185,12 +185,12 @@ void setStepper(int target)
     // Function for aiming the machine
     if (target < stepperPosition)
     {
-        steppermotor.step(-1);
+        steppermotor.step(-1*StepOneDeg);
         stepperPosition -= 1;
     }
     else if (target > stepperPosition)
     {
-        steppermotor.step(1);
+        steppermotor.step(1*StepOneDeg);
         stepperPosition += 1;
         Serial.println(stepperPosition);
     }
