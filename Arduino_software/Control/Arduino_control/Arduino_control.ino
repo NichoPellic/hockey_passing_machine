@@ -4,7 +4,7 @@
 #include <Servo.h>
 
 //I/O Pins
-const byte limitSwitch1 = 2;
+const byte limitSwitch = 2;
 const byte batterPower = 3;
 const byte signalLed = 4;
 const byte esc1Pin = 5;
@@ -47,12 +47,16 @@ const float LOST_STEPS= STEPS_PER_DEG_OUT_REV - StepOneDeg;
 
 //Setup function for stepper motor
 Stepper steppermotor(STEPS_PER_OUT_REV, stepperPin1, stepperPin3, stepperPin2, stepperPin4);
-    
+
+//Input limits 
 const int lowerDegreesLimit = 0;
-const int highestDegreesLimit = 6000;
+const int highestDegreesLimit = 360;
 
 //Current stepper position
-int stepperPosition = 0;
+volatile int stepperPosition = 0;
+
+//Resets the target value
+volatile bool resetTarget = false;
 
 //Compensate for float to int conversion
 int additionalSteps = 0;
@@ -66,22 +70,29 @@ Servo ESC2;
  
 void setup()
 {
-    //The delay allows the terminal to start reading the data
-    //Applies to VS Code due to the serial monitor using some time before reading the input buffer
-    delay(1000);
     //Setup I/O pins
-    pinMode(armingSignal, INPUT);
     pinMode(signalLed, OUTPUT);
     pinMode(firingRelay, OUTPUT);
+    pinMode(batterPower, OUTPUT);
+    pinMode(limitSwitch, INPUT);
+    pinMode(armingSignal, INPUT);
+
+    //The signal to the relay is inverted
+    digitalWrite(batterPower, HIGH);
+
+    //Limitswitch to calibrate stepper
+    attachInterrupt(digitalPinToInterrupt(limitSwitch), isr, RISING);
 
     //Attach servo objects to pins
     ESC1.attach(esc1Pin);
     ESC2.attach(esc2Pin);
 
     //Set speed stepper
-    steppermotor.setSpeed(5);
+    steppermotor.setSpeed(10);
     
-    Serial.begin(115200);      
+    Serial.begin(115200);    
+    //Set timeout low to prevent Seria.parseInt() from waiting to long
+    Serial.setTimeout(10);  
 }
  
 void loop()
@@ -89,8 +100,8 @@ void loop()
     int input = 0;
 
     Serial.println("Select mode for Arduino");
-    Serial.println("To control from terminal enter    (1)");   
-    Serial.println("For the Arduino to run auto enter (2)");   
+    Serial.println("Enter (1) to control from terminal)");   
+    Serial.println("Enter (2) to run in auto mode");   
 
     while(!Serial.available());
 
@@ -102,31 +113,37 @@ void loop()
         if(input == 1)
         {
             input = 0;
-            digitalWrite(signalLed, LOW);
+            //digitalWrite(signalLed, LOW);
             Serial.println("Arduino in manual mode!");
             Serial.println("Enter (1) to exit manual mode");
             Serial.println("Enter (2) to activate firing mechanisme");
             Serial.println("Enter (3) to toogle ESC");
             Serial.println("Enter (4) to set target direction");
+            Serial.println("Enter (5) to toggle battery to ESC");
 
             manualMode = true;
 
             int degrees = 0;
             int steps = 0;
             bool spinMotors = false;
-            bool runStepper = false;            
+            bool runStepper = false;    
+            bool connectBattery = true;        
 
             while(true)
             {
+                if(resetTarget) 
+                {
+                    runStepper = false;
+                    resetTarget = false;
+                }
+
                 if(spinMotors) setMotorSpeed(0);     
-                if(runStepper) setStepper(steps);  
+                if(runStepper) setStepper(steps);               
 
                 if(Serial.available() > 0)               
                 {
                     input = Serial.parseInt();
 
-                    //Maybe replace with a switch statement?
-                    //Would then have to redo while() loop
                     if(input == 1) break;
 
                     else if(input == 2) firePuck();
@@ -159,6 +176,16 @@ void loop()
                         }   
                     }
 
+                    else if(input == 5)
+                    {
+                        connectBattery = !connectBattery;
+                        digitalWrite(batterPower, connectBattery);
+
+                        if(!connectBattery) Serial.println("Battery connected!");
+
+                        else Serial.println("Battery disconnected!");
+                    }
+
                     else if(input == 0) ; //Do nothing, a bug in VS Code sends extra data over the serial line
 
                     else Serial.println("Please enter a valid value!");                             
@@ -169,17 +196,35 @@ void loop()
         //Automatically controlled
         else if(input == 2)  
         {
-            digitalWrite(signalLed, HIGH);
-            input = 0;
+            int degrees = 0;
+            int steps = 0;
+            bool runStepper = false;
             Serial.println("Arduino in auto mode!");
 
             while(true)
-            {
+            {                
+                if(resetTarget)
+                {
+                   runStepper = false;
+                   resetTarget = false;
+                }
+                
+                if(runStepper) setStepper(steps);
+
                 if(Serial.available() > 0)
                 {
-                    input = Serial.parseInt();
-                    
-                    if(input < 100 && input > 0) setStepper(input);               
+                    digitalWrite(signalLed, HIGH);
+
+                    degrees = Serial.parseInt();
+
+                    if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
+                    {
+                        runStepper = true;
+                        steps = degrees * StepOneDeg;
+                        additionalSteps = LOST_STEPS * degrees;
+                    }               
+
+                    digitalWrite(signalLed, LOW);
                 }
             }            
         }  
@@ -187,6 +232,7 @@ void loop()
 }
 
 //Stepper for yaw
+//Target given in steps
 void setStepper(int target)
 {       
     // Function for aiming the machine
@@ -197,7 +243,7 @@ void setStepper(int target)
     }
     else if (target + additionalSteps > stepperPosition)
     {
-        steppermotor.step(1);µ
+        steppermotor.step(1);
         stepperPosition += 1;        
     }
 
@@ -270,4 +316,10 @@ void calibrateESC()
     escCalibrated = true;
 
     Serial.println("ESC calibrated!");
+}
+
+void isr()
+{
+    stepperPosition = 0;
+    resetTarget = true;
 }
