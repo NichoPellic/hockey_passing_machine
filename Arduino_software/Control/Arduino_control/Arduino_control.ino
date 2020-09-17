@@ -19,8 +19,10 @@ const byte stepperPin4 = 13;
 //Analog Inputs
 int potmeter = A0;
 
+bool headlessMode = true;
 bool manualMode = false;
 bool escCalibrated = false;
+bool connectBattery = true;    
 
 unsigned long previousMillis = 0;
 
@@ -64,6 +66,8 @@ int additionalSteps = 0;
 //Current speed sent to the ESC's
 int currentMotorSpeed = 0;
 
+volatile unsigned long lastInterrupLimitSwitch = 0;
+
 //Creating servo objects
 Servo ESC1;
 Servo ESC2;
@@ -81,11 +85,7 @@ void setup()
     digitalWrite(batterPower, HIGH);
 
     //Limitswitch to calibrate stepper
-    attachInterrupt(digitalPinToInterrupt(limitSwitch), isr, RISING);
-
-    //Attach servo objects to pins
-    ESC1.attach(esc1Pin);
-    ESC2.attach(esc2Pin);
+    attachInterrupt(digitalPinToInterrupt(limitSwitch), stepperLimit, RISING);
 
     //Set speed stepper
     steppermotor.setSpeed(10);
@@ -93,6 +93,12 @@ void setup()
     Serial.begin(115200);    
     //Set timeout low to prevent Seria.parseInt() from waiting to long
     Serial.setTimeout(10);  
+
+    if(headlessMode) return;
+    
+    Serial.println("Homing stepper...");
+    calibrateStepper();    
+    Serial.println("Done!");
 }
  
 void loop()
@@ -100,7 +106,7 @@ void loop()
     int input = 0;
 
     Serial.println("Select mode for Arduino");
-    Serial.println("Enter (1) to control from terminal)");   
+    Serial.println("Enter (1) to control from terminal");   
     Serial.println("Enter (2) to run in auto mode");   
 
     while(!Serial.available());
@@ -113,7 +119,6 @@ void loop()
         if(input == 1)
         {
             input = 0;
-            //digitalWrite(signalLed, LOW);
             Serial.println("Arduino in manual mode!");
             Serial.println("Enter (1) to exit manual mode");
             Serial.println("Enter (2) to activate firing mechanisme");
@@ -127,7 +132,6 @@ void loop()
             int steps = 0;
             bool spinMotors = false;
             bool runStepper = false;    
-            bool connectBattery = true;        
 
             while(true)
             {
@@ -144,10 +148,13 @@ void loop()
                 {
                     input = Serial.parseInt();
 
+                    //Exits the while loop
                     if(input == 1) break;
 
+                    //Activate firing mechanism
                     else if(input == 2) firePuck();
 
+                    //
                     else if(input == 3) 
                     
                     {
@@ -178,8 +185,9 @@ void loop()
 
                     else if(input == 5)
                     {
-                        connectBattery = !connectBattery;
-                        digitalWrite(batterPower, connectBattery);
+                        connectBattery = !connectBattery;    
+                        escCalibrated = false;                    
+                        digitalWrite(batterPower, connectBattery);                        
 
                         if(!connectBattery) Serial.println("Battery connected!");
 
@@ -235,7 +243,8 @@ void loop()
 //Target given in steps
 void setStepper(int target)
 {       
-    // Function for aiming the machine
+    //Function for aiming the machine
+    //Only moves one step each loop to allow for new coordinates
     if (target + additionalSteps < stepperPosition)
     {        
         steppermotor.step(-1);
@@ -254,40 +263,43 @@ void setMotorSpeed(int targetValue)
 {
     if(!escCalibrated) calibrateESC();
 
-    if(manualMode)
+    if(escCalibrated)
     {
-        int speedValue = map(analogRead(potmeter), 0 , 1024, 1000, 2000);
-        ESC1.writeMicroseconds(speedValue);
-        ESC2.writeMicroseconds(speedValue);
-
-        if(millis() - previousMillis >= printDelay)
+        if(manualMode)
         {
-            previousMillis = millis();
-            Serial.print("ESC speedvalue: ");
-            Serial.print((speedValue-1000)/10);
-            Serial.println("%");
-        }        
-    }
+            int speedValue = map(analogRead(potmeter), 0 , 1024, 1000, 2000);
+            ESC1.writeMicroseconds(speedValue);
+            ESC2.writeMicroseconds(speedValue);
 
-    else
-    {        
-        ESC1.writeMicroseconds(targetValue);
-        ESC2.writeMicroseconds(targetValue);           
-    }
+            if(millis() - previousMillis >= printDelay)
+            {
+                previousMillis = millis();
+                Serial.print("ESC speedvalue: ");
+                Serial.print((speedValue-1000)/10);
+                Serial.println("%");
+            }        
+        }
+
+        else
+        {        
+            ESC1.writeMicroseconds(targetValue);
+            ESC2.writeMicroseconds(targetValue);           
+        }
+    }    
 }
 
 void firePuck()
 {
     if(manualMode)
     {
-        //Serial.println("Firing puck in manual mode");
         digitalWrite(firingRelay, HIGH);
-        //delay(2000); //For test purpose
+        delay(500); //For test purpose
         digitalWrite(firingRelay, LOW);
     }
 
     else
     {
+        //Seems redundant?
         if(currentMotorSpeed >= 1000)
         {
             digitalWrite(firingRelay, HIGH);
@@ -298,28 +310,48 @@ void firePuck()
 }
 
 void calibrateESC()
-{   
-    Serial.println("Calibrating ESC..."); 
-    //Set minimum range
-    ESC1.writeMicroseconds(1000);
-    ESC2.writeMicroseconds(1000);
-    delay(10);
-    //Set maximum range
-    ESC1.writeMicroseconds(2000);
-    ESC2.writeMicroseconds(2000);
-    delay(10);
-    
-    //Sets ESC to minimum speed
-    ESC1.writeMicroseconds(1000);
-    ESC2.writeMicroseconds(1000);
+{  
+    if(!connectBattery)
+    {
+        //Attach servo objects to pins
+        ESC1.attach(esc1Pin);
+        ESC2.attach(esc2Pin);
 
-    escCalibrated = true;
+        Serial.println("Calibrating ESC..."); 
+        //Set minimum range for ESC
+        ESC1.writeMicroseconds(1000);
+        ESC2.writeMicroseconds(1000);
+        delay(500);
+        //Set maximum range for ESC
+        ESC1.writeMicroseconds(2000);
+        ESC2.writeMicroseconds(2000);
+        delay(500);
+        
+        //Sets ESC to minimum speed
+        ESC1.writeMicroseconds(1000);
+        ESC2.writeMicroseconds(1000);
 
-    Serial.println("ESC calibrated!");
+        escCalibrated = true;
+
+        Serial.println("ESC calibrated!");   
+    }
+
+    else Serial.println("Battery not connected, please turn on battery in settings and retry");
 }
 
-void isr()
+void calibrateStepper()
+{   
+    //Go left untill limit switch is hit     
+    while(!resetTarget) steppermotor.step(-1);
+}
+
+void stepperLimit()
 {
-    stepperPosition = 0;
-    resetTarget = true;
+    //De-bounce
+    if((millis() - lastInterrupLimitSwitch) > 50)
+    {
+        stepperPosition = 0;
+        resetTarget = true;
+        lastInterrupLimitSwitch = millis();
+    }    
 }
