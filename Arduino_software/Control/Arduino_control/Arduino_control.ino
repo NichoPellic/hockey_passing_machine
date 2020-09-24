@@ -83,6 +83,7 @@ void setup()
 
     //The signal to the relay is inverted
     digitalWrite(batterPower, HIGH);
+    digitalWrite(signalLed, HIGH);
 
     //Limitswitch to calibrate stepper
     attachInterrupt(digitalPinToInterrupt(limitSwitch), stepperLimit, RISING);
@@ -204,35 +205,66 @@ void loop()
         //Automatically controlled
         else if(input == 2)  
         {
+            digitalWrite(signalLed, HIGH);
+
             int degrees = 0;
+            int motorSpeed = 0;
             int steps = 0;
             bool runStepper = false;
             Serial.println("Arduino in auto mode!");
 
+            String inputString = "";            
+
             while(true)
-            {                
-                if(resetTarget)
-                {
-                   runStepper = false;
-                   resetTarget = false;
-                }
+            {         
+                //Don't run stepper if it isn't homed       
+                if(resetTarget) runStepper = false, resetTarget = false;
                 
                 if(runStepper) setStepper(steps);
 
                 if(Serial.available() > 0)
                 {
-                    digitalWrite(signalLed, HIGH);
+                    //degrees = Serial.parseInt();
+                    inputString = Serial.readStringUntil(";");
+                    
+                    const int arraySize = 10;
+                    char inputArray[arraySize];   
+                    byte parameter = 0; 
 
-                    degrees = Serial.parseInt();
+                    inputString.toCharArray(inputArray, arraySize);
 
+                    String degreesString = "";
+                    String motorSpeedString = "";
+
+                    for(int i = 0; i < arraySize; i++)
+                    {
+                        if(inputArray[i] == ',') parameter++, i++;
+
+                        else if(inputArray[i] == ';') break;
+
+                        switch (parameter)
+                        {
+                        case 0:
+                            degreesString += inputArray[i];
+                            break;
+                        
+                        case 1:
+                            motorSpeedString += inputArray[i];
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+
+                    degrees = degreesString.toInt();
+                    motorSpeed = motorSpeedString.toInt();
+                    
                     if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
                     {
                         runStepper = true;
                         steps = degrees * StepOneDeg;
                         additionalSteps = LOST_STEPS * degrees;
-                    }               
-
-                    digitalWrite(signalLed, LOW);
+                    }     
                 }
             }            
         }  
@@ -299,13 +331,10 @@ void firePuck()
 
     else
     {
-        //Seems redundant?
-        if(currentMotorSpeed >= 1000)
-        {
-            digitalWrite(firingRelay, HIGH);
-            delay(500);
-            digitalWrite(firingRelay, LOW);
-        }
+        
+        digitalWrite(firingRelay, HIGH);
+        delay(500);
+        digitalWrite(firingRelay, LOW);
     }    
 }
 
@@ -318,14 +347,16 @@ void calibrateESC()
         ESC2.attach(esc2Pin);
 
         Serial.println("Calibrating ESC..."); 
+        
         //Set minimum range for ESC
         ESC1.writeMicroseconds(1000);
         ESC2.writeMicroseconds(1000);
-        delay(500);
+        delay(1000);
+
         //Set maximum range for ESC
         ESC1.writeMicroseconds(2000);
         ESC2.writeMicroseconds(2000);
-        delay(500);
+        delay(1000);
         
         //Sets ESC to minimum speed
         ESC1.writeMicroseconds(1000);
