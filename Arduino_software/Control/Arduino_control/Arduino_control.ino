@@ -19,6 +19,7 @@ const byte stepperPin4 = 13;
 //Analog Inputs
 int potmeter = A0;
 
+//Global boolean values
 bool headlessMode = true;
 bool manualMode = false;
 bool escCalibrated = false;
@@ -95,7 +96,9 @@ void setup()
     //Set timeout low to prevent Seria.parseInt() from waiting to long
     Serial.setTimeout(10);  
 
-    if(headlessMode) return;
+    //If testing the arduino with anything connected headlessMode can be set to true
+    //avoiding homing the stepper
+    if(headlessMode) Serial.println("Arduino in headless mode, skipping stepper"), return;
     
     Serial.println("Homing stepper...");
     calibrateStepper();    
@@ -136,13 +139,10 @@ void loop()
 
             while(true)
             {
-                if(resetTarget) 
-                {
-                    runStepper = false;
-                    resetTarget = false;
-                }
+                if(resetTarget) runStepper = false, resetTarget = false;
 
                 if(spinMotors) setMotorSpeed(0);     
+
                 if(runStepper) setStepper(steps);               
 
                 if(Serial.available() > 0)               
@@ -258,7 +258,7 @@ void loop()
 
                     degrees = degreesString.toInt();
                     motorSpeed = motorSpeedString.toInt();
-                    
+
                     if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
                     {
                         runStepper = true;
