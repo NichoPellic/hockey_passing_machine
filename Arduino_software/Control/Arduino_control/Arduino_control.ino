@@ -86,7 +86,6 @@ void setup()
 
     //The signal to the relay is inverted
     digitalWrite(batterPower, HIGH);
-    digitalWrite(signalLed, HIGH);
 
     //Limitswitch to calibrate stepper
     attachInterrupt(digitalPinToInterrupt(limitSwitch), stepperLimit, RISING);
@@ -96,11 +95,15 @@ void setup()
     
     Serial.begin(115200);    
     //Set timeout low to prevent Seria.parseInt() from waiting to long
-    Serial.setTimeout(10);  
+    Serial.setTimeout(10); 
 
     //If testing the arduino with anything connected headlessMode can be set to true
     //avoiding homing the stepper
-    if(headlessMode) Serial.println("Arduino in headless mode, skipping stepper"), return;
+    if(headlessMode) 
+    {
+        Serial.println("Arduino in headless mode, skipping stepper"); 
+        return;
+    }
     
     Serial.println("Homing stepper...");
     calibrateStepper();    
@@ -210,6 +213,7 @@ void loop()
             Serial.println("Arduino in auto mode!");
 
             digitalWrite(signalLed, HIGH);
+            connectBattery = false;
 
             int degrees = 0;
             int motorSpeed = 0;
@@ -263,7 +267,7 @@ void loop()
                     motorSpeed = motorSpeedString.toInt();
 
                     //Sets the motorspeed
-                    if((motorSpeed >= lowerESCLimit) && (motorSpeed <= highestDegreesLimit)) setMotorSpeed(motorSpeed);
+                    if((motorSpeed >= lowerESCLimit) && (motorSpeed <= highestESCLimit)) setMotorSpeed(motorSpeed);
 
                     //Turns the stepper in target direction
                     if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
@@ -295,7 +299,7 @@ void setStepper(int target)
         stepperPosition += 1;        
     }
 
-    if(armingSignal && target == stepperPosition) firePuck();  
+    if((digitalRead(armingSignal)) && ((target + additionalSteps) == stepperPosition)) firePuck();  
 }
 
 void setMotorSpeed(int targetValue) 
@@ -306,7 +310,7 @@ void setMotorSpeed(int targetValue)
     {
         if(manualMode)
         {
-            int speedValue = map(analogRead(potmeter), 0 , 1024, 1000, 2000);
+            int speedValue = map(analogRead(potmeter), 0 , 1024, lowerESCLimit, highestESCLimit);
             ESC1.writeMicroseconds(speedValue);
             ESC2.writeMicroseconds(speedValue);
 
@@ -328,21 +332,10 @@ void setMotorSpeed(int targetValue)
 }
 
 void firePuck()
-{
-    if(manualMode)
-    {
-        digitalWrite(firingRelay, HIGH);
-        delay(500); //For test purpose
-        digitalWrite(firingRelay, LOW);
-    }
-
-    else
-    {
-        
-        digitalWrite(firingRelay, HIGH);
-        delay(500);
-        digitalWrite(firingRelay, LOW);
-    }    
+{       
+    digitalWrite(firingRelay, HIGH);
+    delay(500);
+    digitalWrite(firingRelay, LOW);    
 }
 
 void calibrateESC()
@@ -379,7 +372,7 @@ void calibrateESC()
 
 void calibrateStepper()
 {   
-    //Go left untill limit switch is hit     
+    //Go left until limit switch is hit     
     while(!resetTarget) steppermotor.step(-1);
 }
 
