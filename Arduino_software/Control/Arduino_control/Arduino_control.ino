@@ -54,6 +54,8 @@ Stepper steppermotor(STEPS_PER_OUT_REV, stepperPin1, stepperPin3, stepperPin2, s
 //Input limits 
 const int lowerDegreesLimit = 0;
 const int highestDegreesLimit = 360;
+const int lowerESCLimit = 1000;
+const int highestESCLimit = 2000;
 
 //Current stepper position
 volatile int stepperPosition = 0;
@@ -205,13 +207,14 @@ void loop()
         //Automatically controlled
         else if(input == 2)  
         {
+            Serial.println("Arduino in auto mode!");
+
             digitalWrite(signalLed, HIGH);
 
             int degrees = 0;
             int motorSpeed = 0;
             int steps = 0;
             bool runStepper = false;
-            Serial.println("Arduino in auto mode!");
 
             String inputString = "";            
 
@@ -251,7 +254,7 @@ void loop()
                         case 1:
                             motorSpeedString += inputArray[i];
                             break;
-                        default:
+                        default:                        
                             break;
                         }
                     }
@@ -259,12 +262,16 @@ void loop()
                     degrees = degreesString.toInt();
                     motorSpeed = motorSpeedString.toInt();
 
+                    //Sets the motorspeed
+                    if((motorSpeed >= lowerESCLimit) && (motorSpeed <= highestDegreesLimit)) setMotorSpeed(motorSpeed);
+
+                    //Turns the stepper in target direction
                     if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
                     {
                         runStepper = true;
                         steps = degrees * StepOneDeg;
                         additionalSteps = LOST_STEPS * degrees;
-                    }     
+                    }                                      
                 }
             }            
         }  
@@ -349,18 +356,18 @@ void calibrateESC()
         Serial.println("Calibrating ESC..."); 
         
         //Set minimum range for ESC
-        ESC1.writeMicroseconds(1000);
-        ESC2.writeMicroseconds(1000);
+        ESC1.writeMicroseconds(lowerESCLimit);
+        ESC2.writeMicroseconds(lowerESCLimit);
         delay(1000);
 
         //Set maximum range for ESC
-        ESC1.writeMicroseconds(2000);
-        ESC2.writeMicroseconds(2000);
+        ESC1.writeMicroseconds(highestESCLimit);
+        ESC2.writeMicroseconds(highestESCLimit);
         delay(1000);
         
         //Sets ESC to minimum speed
-        ESC1.writeMicroseconds(1000);
-        ESC2.writeMicroseconds(1000);
+        ESC1.writeMicroseconds(lowerESCLimit);
+        ESC2.writeMicroseconds(lowerESCLimit);
 
         escCalibrated = true;
 
