@@ -5,3 +5,4 @@ Image_processing_python/yolov3.weights
 .vscode/arduino.json
 .vscode/c_cpp_properties.json
 Image_processing_python/testing.py
+Image_processing_python/ssd_mobilenet_v1_1_metadata_1.tflite
