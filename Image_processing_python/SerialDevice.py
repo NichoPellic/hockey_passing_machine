@@ -1,6 +1,7 @@
 import serial
 import serial.tools.list_ports
 import time
+import glob
 from sys import platform
 
 class Arduino:
@@ -9,8 +10,9 @@ class Arduino:
         self.platform = platform
 
     def ConnectDevice(self):
-        baudrate = 115200
-        timeout = 0
+        succsess = False
+        brate = 115200
+        tout = 0
         delay = 2
 
         if(self.platform == "win32"):
@@ -18,24 +20,43 @@ class Arduino:
             comPort = GetSerialPorts()
 
             try:
-                self.controller = serial.Serial(port=comPort, baudrate=115200, timeout=0)
+                self.controller = serial.Serial(port=comPort, baudrate=brate, timeout=tout)
                 print("Succsesfully connected to device at " + comPort + ". Sleeping for {0} seconds to let the controller reset".format(delay))
+                succsess = True
+                
+            except:
+                print("Unable to connect to controller!")
+
+        elif(self.platform == "linux"):
+
+            ports = glob.glob("/dev/tty[A-Za-a]*")
+            comPort = ports[0] #Basiclly assumes that the first device is an arduino
+                    
+            try:
+                self.controller = serial.Serial(port=comPort, baudrate=brate, timeout=tout)
+                print("Succsesfully connected to device at " + comPort + ". Sleeping for {0} seconds to let the controller reset".format(delay))
+                succsess = True
+                
+            except:
+                print("Unable to connect to controller!")
+
+        #Set the Arduino to auto mode
+        if(succsess):
+            try:
                 time.sleep(delay) #Allow the Arduino to reset and boot up
                 msg = "2" 
                 self.controller.write(msg.encode('utf-8'))
                 return True
+
             except:
                 print("Unable to connect to controller!")
                 self.controller.close()
                 return False
 
-        elif(self.platform == "linux"):
-            return
-
     #Returns true if the data was sent succsessfully
     def SendData(self, data):
         if self.controller is not None:
-            try:        
+            try:
                 #Creates a string of the data and encodes in utf-8 format before sending
                 msg = str(data) + ";"
                 self.controller.write(msg.encode("utf-8"))
@@ -59,8 +80,6 @@ class Arduino:
                     return msg[len(msg) - 1].decode("utf-8")
             else:
                 return ""
-
-
 
 
 #Returns a list of connected serial devices
@@ -91,4 +110,8 @@ def GetSerialPorts():
         return comPort
 
     elif(platform == "linux"):
+        ports = glob.glob("/dev/tty[A-Za-a]*")
+
+        for port in ports:
+            print(port)
         return
