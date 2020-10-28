@@ -27,7 +27,8 @@ bool connectBattery = true;
 
 unsigned long previousMillis = 0;
 
-const int printDelay(1000);
+//How often variables are written to the serial port
+const int printDelay = 1000;
 
 //Stepper setup
 //Number of steps per internal motor revolution 
@@ -69,6 +70,7 @@ int additionalSteps = 0;
 //Current speed sent to the ESC's
 int currentMotorSpeed = 0;
 
+//Time variable for limit switch, used for debounce
 volatile unsigned long lastInterrupLimitSwitch = 0;
 
 //Creating servo objects
@@ -118,8 +120,10 @@ void loop()
     Serial.println("Enter (1) to control from terminal");   
     Serial.println("Enter (2) to run in auto mode");   
 
+    //Waits for serial connection
     while(!Serial.available());
 
+    //If serial data available
     while(Serial.available() > 0)
     {
         input = Serial.parseInt();
@@ -160,7 +164,7 @@ void loop()
                     //Activate firing mechanism
                     else if(input == 2) firePuck();
 
-                    //
+                    //Toggles the ESC's
                     else if(input == 3) 
                     
                     {
@@ -171,6 +175,7 @@ void loop()
                         else Serial.println("Toggled ESC off"); 
                     }
 
+                    //Set stepper position
                     else if(input == 4)
                     {
                         Serial.print("Enter target value in degrees: ");
@@ -189,6 +194,7 @@ void loop()
                         }   
                     }
 
+                    //Activate battery relay
                     else if(input == 5)
                     {
                         connectBattery = !connectBattery;    
@@ -200,8 +206,9 @@ void loop()
                         else Serial.println("Battery disconnected!");
                     }
 
-                    else if(input == 0) ; //Do nothing, a bug in VS Code sends extra data over the serial line
-
+                    //Do nothing, a bug in VS Code sends extra data over the serial line                
+                    else if(input == 0) ; 
+                    
                     else Serial.println("Please enter a valid value!");                             
                 }                
             }
@@ -243,6 +250,7 @@ void loop()
                     String degreesString = "";
                     String motorSpeedString = "";
 
+                    //Parse input message
                     for(int i = 0; i < arraySize; i++)
                     {
                         if(inputArray[i] == ',') parameter++, i++;
@@ -273,12 +281,14 @@ void loop()
                     if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
                     {
                         runStepper = true;
+
+                        //Calcluate the delta of movement instead of absoulut based on pervious position
                         steps = degrees * StepOneDeg;
                         additionalSteps = LOST_STEPS * degrees;
                     }                                      
                 }
-            }            
-        }  
+            }
+        }
     }    
 }
 
@@ -288,6 +298,7 @@ void setStepper(int target)
 {       
     //Function for aiming the machine
     //Only moves one step each loop to allow for new coordinates
+    //As stepper.step() is a blocking function
     if (target + additionalSteps < stepperPosition)
     {        
         steppermotor.step(-1);
@@ -351,11 +362,15 @@ void calibrateESC()
         //Set minimum range for ESC
         ESC1.writeMicroseconds(lowerESCLimit);
         ESC2.writeMicroseconds(lowerESCLimit);
+
+        //Allow the ESC to registrer new min value
         delay(1000);
 
         //Set maximum range for ESC
         ESC1.writeMicroseconds(highestESCLimit);
         ESC2.writeMicroseconds(highestESCLimit);
+
+        //Allow the ESC to registrer new max value
         delay(1000);
         
         //Sets ESC to minimum speed
