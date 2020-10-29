@@ -11,16 +11,18 @@ const byte esc1Pin = 5;
 const byte esc2Pin = 6;
 const byte armingSignal = 7;
 const byte firingRelay = 8;
-const byte stepperPin1 = 10;
-const byte stepperPin2 = 11;
-const byte stepperPin3 = 12;
-const byte stepperPin4 = 13;
+const byte stepperDirection = 9;
+const byte stepperPulse = 10;
+//const byte stepperPin1 = 10;
+//const byte stepperPin2 = 11;
+//const byte stepperPin3 = 12;
+//const byte stepperPin4 = 13;
 
 //Analog Inputs
 int potmeter = A0;
 
 //Global boolean values
-bool headlessMode = true;
+bool headlessMode = true;       //Preferable to short this / make it a digital input
 bool manualMode = false;
 bool escCalibrated = false;
 bool connectBattery = true;    
@@ -30,27 +32,33 @@ unsigned long previousMillis = 0;
 //How often variables are written to the serial port
 const int printDelay = 1000;
 
+//Waiting periode for the time between step pulses
+const int stepperSpeed = 1;
+
 //Stepper setup
 //Number of steps per internal motor revolution 
-const float STEPS_PER_REV = 32; 
+//const float STEPS_PER_REV = 32; 
  
 //Amount of Gear Reduction
-const float GEAR_RED = 64;
+//const float GEAR_RED = 64;
  
+//Full steps
+const int FULL_STEPS = 200;
+
+//Half steps
+const int HALF_STEPS = 400;
+
 //Number of steps per geared output rotation
-const float STEPS_PER_OUT_REV = STEPS_PER_REV * GEAR_RED;
+//const float STEPS_PER_OUT_REV = STEPS_PER_REV * GEAR_RED;
  
 //Number of steps to turn one degree
-const float STEPS_PER_DEG_OUT_REV = STEPS_PER_OUT_REV / 360;
+const float STEPS_PER_DEG_OUT_REV = float(HALF_STEPS) / float(360);
 
 //Integer value for turning one degree
 const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
 
 //Lost steps per degree
 const float LOST_STEPS= STEPS_PER_DEG_OUT_REV - StepOneDeg;
-
-//Setup function for stepper motor
-Stepper steppermotor(STEPS_PER_OUT_REV, stepperPin1, stepperPin3, stepperPin2, stepperPin4);
 
 //Input limits 
 const int lowerDegreesLimit = 0;
@@ -85,6 +93,8 @@ void setup()
     pinMode(batterPower, OUTPUT);
     pinMode(limitSwitch, INPUT);
     pinMode(armingSignal, INPUT);
+    pinMode(stepperDirection, OUTPUT);
+    pinMode(stepperPulse, OUTPUT);
 
     //The signal to the relay is inverted
     digitalWrite(batterPower, HIGH);
@@ -93,7 +103,7 @@ void setup()
     attachInterrupt(digitalPinToInterrupt(limitSwitch), stepperLimit, RISING);
 
     //Set speed stepper
-    steppermotor.setSpeed(10);
+    //steppermotor.setSpeed(10);
     
     Serial.begin(115200);    
     //Set timeout low to prevent Seria.parseInt() from waiting to long
@@ -189,8 +199,9 @@ void loop()
                         if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
                         {
                             runStepper = true;
-                            steps = degrees * StepOneDeg;
-                            additionalSteps = LOST_STEPS * degrees;
+                            float requiredSteps = degrees * StepOneDeg;
+                            steps = int(requiredSteps);
+                            additionalSteps = LOST_STEPS * degrees;   
                         }   
                     }
 
@@ -295,20 +306,14 @@ void loop()
 //Stepper for yaw
 //Target given in steps
 void setStepper(int target)
-{       
-    //Function for aiming the machine
-    //Only moves one step each loop to allow for new coordinates
-    //As stepper.step() is a blocking function
-    if (target + additionalSteps < stepperPosition)
-    {        
-        steppermotor.step(-1);
-        stepperPosition -= 1;
-    }
-    else if (target + additionalSteps > stepperPosition)
-    {
-        steppermotor.step(1);
-        stepperPosition += 1;        
-    }
+{    
+    //Sets stepper direction
+    if (target + additionalSteps < stepperPosition) digitalWrite(stepperDirection, HIGH), stepperPosition--;  
+       
+    else if (target + additionalSteps > stepperPosition) digitalWrite(stepperDirection, LOW), stepperPosition++;    
+
+    //Moves one step
+    if((target + additionalSteps) != stepperPosition) MoveStepper();
 
     if((digitalRead(armingSignal)) && ((target + additionalSteps) == stepperPosition)) firePuck();  
 }
@@ -388,7 +393,7 @@ void calibrateESC()
 void calibrateStepper()
 {   
     //Go left until limit switch is hit     
-    while(!resetTarget) steppermotor.step(-1);
+    while(!resetTarget) MoveStepper();
 }
 
 void stepperLimit()
@@ -400,4 +405,11 @@ void stepperLimit()
         resetTarget = true;
         lastInterrupLimitSwitch = millis();
     }    
+}
+
+void MoveStepper()
+{
+    digitalWrite(stepperPulse, HIGH);
+    delayMicroseconds(1000);
+    digitalWrite(stepperPulse, LOW);
 }
