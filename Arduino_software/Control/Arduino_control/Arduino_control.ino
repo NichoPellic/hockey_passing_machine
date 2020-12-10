@@ -8,7 +8,7 @@ const byte limitSwitch = 2;
 const byte batterPower = 3;
 const byte signalLed = 4;
 const byte esc1Pin = 5;
-const byte esc2Pin = 6;
+const byte firingServoPin = 6;
 const byte armingSignal = 7;
 const byte firingRelay = 8;
 const byte stepperDirection = 9;
@@ -25,22 +25,33 @@ int potmeter = A0;
 bool headlessMode = true;       //Preferable to short this / make it a digital input
 bool manualMode = false;
 bool escCalibrated = false;
-bool connectBattery = true;    
+bool connectBattery = true;   
+bool puckLoaded = false; 
 
 unsigned long previousMillis = 0;
 
 //How often variables are written to the serial port
 const int printDelay = 1000;
 
+//Fire rate settings
+unsigned long lastPuckFired = 0;
+const int fireRateDelay = 10000; //Only fires every 5 seconds, even if target is aquired
+
 //Waiting periode for the time between step pulses
 const int stepperSpeed = 1;
+
+
+//Fixed speed settings for the continues servo
+const int BACKWARD = 1600;
+const int FORWARD = 1400;
+const int NEUTRAL = 1500;
 
 //Stepper setup
 //Number of steps per internal motor revolution 
 //const float STEPS_PER_REV = 32; 
  
 //Amount of Gear Reduction
-//const float GEAR_RED = 64;
+const float GEAR_RED = 4;//0.25;
  
 //Full steps
 const int FULL_STEPS = 200;
@@ -52,7 +63,7 @@ const int HALF_STEPS = 400;
 //const float STEPS_PER_OUT_REV = STEPS_PER_REV * GEAR_RED;
  
 //Number of steps to turn one degree
-const float STEPS_PER_DEG_OUT_REV = float(HALF_STEPS) / float(360);
+const float STEPS_PER_DEG_OUT_REV = float((HALF_STEPS / float(360)) * GEAR_RED); // / float(360);
 
 //Integer value for turning one degree
 const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
@@ -83,10 +94,13 @@ volatile unsigned long lastInterrupLimitSwitch = 0;
 
 //Creating servo objects
 Servo ESC1;
-Servo ESC2;
+Servo FiringServo;
  
 void setup()
 {
+
+    FiringServo.attach(firingServoPin);
+
     //Setup I/O pins
     pinMode(signalLed, OUTPUT);
     pinMode(firingRelay, OUTPUT);
@@ -101,6 +115,8 @@ void setup()
 
     //Limitswitch to calibrate stepper
     attachInterrupt(digitalPinToInterrupt(limitSwitch), stepperLimit, RISING);
+
+    digitalWrite(stepperDirection, HIGH);
 
     //Set speed stepper
     //steppermotor.setSpeed(10);
@@ -148,6 +164,7 @@ void loop()
             Serial.println("Enter (3) to toogle ESC");
             Serial.println("Enter (4) to set target direction");
             Serial.println("Enter (5) to toggle battery to ESC");
+            Serial.println("Enter (6) to load puck");
 
             manualMode = true;
 
@@ -216,6 +233,10 @@ void loop()
 
                         else Serial.println("Battery disconnected!");
                     }
+
+                    //Load a new puck to fire
+                    else if (input == 6) loadPuck();
+                    
 
                     //Do nothing, a bug in VS Code sends extra data over the serial line                
                     else if(input == 0) ; 
@@ -307,15 +328,19 @@ void loop()
 //Target given in steps
 void setStepper(int target)
 {    
+    //Serial.print("Stepper target: ");
+    //Serial.println(target + additionalSteps);
+
     //Sets stepper direction
-    if (target + additionalSteps < stepperPosition) digitalWrite(stepperDirection, HIGH), stepperPosition--;  
+    if (target + additionalSteps < stepperPosition) digitalWrite(stepperDirection, LOW), stepperPosition--;  
        
-    else if (target + additionalSteps > stepperPosition) digitalWrite(stepperDirection, LOW), stepperPosition++;    
+    else if (target + additionalSteps > stepperPosition) digitalWrite(stepperDirection, HIGH), stepperPosition++;    
 
     //Moves one step
-    if((target + additionalSteps) != stepperPosition) MoveStepper();
+    if((target + additionalSteps) != stepperPosition) moveStepper();
 
-    if((digitalRead(armingSignal)) && ((target + additionalSteps) == stepperPosition)) firePuck();  
+    //if((digitalRead(armingSignal)) && ((target + additionalSteps) == stepperPosition)) firePuck();  
+    if(((target + additionalSteps) == stepperPosition)) firePuck();  
 }
 
 void setMotorSpeed(int targetValue) 
@@ -328,7 +353,7 @@ void setMotorSpeed(int targetValue)
         {
             int speedValue = map(analogRead(potmeter), 0 , 1024, lowerESCLimit, highestESCLimit);
             ESC1.writeMicroseconds(speedValue);
-            ESC2.writeMicroseconds(speedValue);
+            //ESC2.writeMicroseconds(speedValue);
 
             if(millis() - previousMillis >= printDelay)
             {
@@ -342,16 +367,18 @@ void setMotorSpeed(int targetValue)
         else
         {        
             ESC1.writeMicroseconds(targetValue);
-            ESC2.writeMicroseconds(targetValue);           
+            //ESC2.writeMicroseconds(targetValue);           
         }
     }    
 }
 
 void firePuck()
 {       
-    digitalWrite(firingRelay, HIGH);
-    delay(500);
-    digitalWrite(firingRelay, LOW);    
+    if(millis() - lastPuckFired >= fireRateDelay)
+    {
+        loadPuck(); //Fires the puck
+        lastPuckFired = millis();
+    }
 }
 
 void calibrateESC()
@@ -360,27 +387,26 @@ void calibrateESC()
     {
         //Attach servo objects to pins
         ESC1.attach(esc1Pin);
-        ESC2.attach(esc2Pin);
 
         Serial.println("Calibrating ESC..."); 
         
         //Set minimum range for ESC
         ESC1.writeMicroseconds(lowerESCLimit);
-        ESC2.writeMicroseconds(lowerESCLimit);
+        //ESC2.writeMicroseconds(lowerESCLimit);
 
         //Allow the ESC to registrer new min value
         delay(1000);
 
         //Set maximum range for ESC
         ESC1.writeMicroseconds(highestESCLimit);
-        ESC2.writeMicroseconds(highestESCLimit);
+        //ESC2.writeMicroseconds(highestESCLimit);
 
         //Allow the ESC to registrer new max value
         delay(1000);
         
         //Sets ESC to minimum speed
         ESC1.writeMicroseconds(lowerESCLimit);
-        ESC2.writeMicroseconds(lowerESCLimit);
+        //ESC2.writeMicroseconds(lowerESCLimit);
 
         escCalibrated = true;
 
@@ -393,9 +419,11 @@ void calibrateESC()
 void calibrateStepper()
 {   
     //Go left until limit switch is hit     
-    while(!resetTarget) MoveStepper();
+    while(!resetTarget) moveStepper();
 }
 
+
+//ISR function
 void stepperLimit()
 {
     //De-bounce
@@ -407,9 +435,21 @@ void stepperLimit()
     }    
 }
 
-void MoveStepper()
+void moveStepper()
 {
     digitalWrite(stepperPulse, HIGH);
-    delayMicroseconds(1000);
+    delay(3);
     digitalWrite(stepperPulse, LOW);
+}
+
+void loadPuck()
+{
+    //Move servo all the way back and load new puck
+    FiringServo.writeMicroseconds(BACKWARD);
+    delay(550);
+    //Limit switch trigger
+    FiringServo.writeMicroseconds(FORWARD);
+    delay(600);    
+    FiringServo.writeMicroseconds(NEUTRAL);
+    puckLoaded = true;
 }
