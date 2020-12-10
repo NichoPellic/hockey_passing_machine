@@ -10,7 +10,6 @@ const byte signalLed = 4;
 const byte esc1Pin = 5;
 const byte firingServoPin = 6;
 const byte armingSignal = 7;
-const byte firingRelay = 8;
 const byte stepperDirection = 9;
 const byte stepperPulse = 10;
 //const byte stepperPin1 = 10;
@@ -35,7 +34,7 @@ const int printDelay = 1000;
 
 //Fire rate settings
 unsigned long lastPuckFired = 0;
-const int fireRateDelay = 10000; //Only fires every 5 seconds, even if target is aquired
+const int fireRateDelay = 5000; //Only fires every 5 seconds, even if target is aquired
 
 //Waiting periode for the time between step pulses
 const int stepperSpeed = 1;
@@ -101,9 +100,13 @@ void setup()
 
     FiringServo.attach(firingServoPin);
 
+    //Attach servo objects to pins
+    ESC1.attach(esc1Pin);
+
+    ESC1.writeMicroseconds(1000);
+
     //Setup I/O pins
     pinMode(signalLed, OUTPUT);
-    pinMode(firingRelay, OUTPUT);
     pinMode(batterPower, OUTPUT);
     pinMode(limitSwitch, INPUT);
     pinMode(armingSignal, INPUT);
@@ -259,12 +262,15 @@ void loop()
             int steps = 0;
             bool runStepper = false;
 
+            calibrateESC();
             String inputString = "";            
 
             while(true)
             {         
                 //Don't run stepper if it isn't homed       
                 if(resetTarget) runStepper = false, resetTarget = false;
+
+                ESC1.writeMicroseconds(1050);
                 
                 if(runStepper) setStepper(steps);
 
@@ -307,7 +313,8 @@ void loop()
                     motorSpeed = motorSpeedString.toInt();
 
                     //Sets the motorspeed
-                    if((motorSpeed >= lowerESCLimit) && (motorSpeed <= highestESCLimit)) setMotorSpeed(motorSpeed);
+                    //if((motorSpeed >= lowerESCLimit) && (motorSpeed <= highestESCLimit)) setMotorSpeed(1050);
+                    //setMotorSpeed(1050);
 
                     //Turns the stepper in target direction
                     if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
@@ -351,9 +358,9 @@ void setMotorSpeed(int targetValue)
     {
         if(manualMode)
         {
-            int speedValue = map(analogRead(potmeter), 0 , 1024, lowerESCLimit, highestESCLimit);
+            //int speedValue = map(analogRead(potmeter), 0 , 1024, lowerESCLimit, highestESCLimit);
+            int speedValue = 1050;
             ESC1.writeMicroseconds(speedValue);
-            //ESC2.writeMicroseconds(speedValue);
 
             if(millis() - previousMillis >= printDelay)
             {
@@ -367,10 +374,10 @@ void setMotorSpeed(int targetValue)
         else
         {        
             ESC1.writeMicroseconds(targetValue);
-            //ESC2.writeMicroseconds(targetValue);           
         }
     }    
 }
+
 
 void firePuck()
 {       
@@ -385,8 +392,7 @@ void calibrateESC()
 {  
     if(!connectBattery)
     {
-        //Attach servo objects to pins
-        ESC1.attach(esc1Pin);
+        
 
         Serial.println("Calibrating ESC..."); 
         
@@ -402,11 +408,13 @@ void calibrateESC()
         //ESC2.writeMicroseconds(highestESCLimit);
 
         //Allow the ESC to registrer new max value
-        delay(1000);
+        delay(10);
         
         //Sets ESC to minimum speed
         ESC1.writeMicroseconds(lowerESCLimit);
         //ESC2.writeMicroseconds(lowerESCLimit);
+
+        delay(5000);
 
         escCalibrated = true;
 
