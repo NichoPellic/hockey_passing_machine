@@ -10,10 +10,11 @@ class Arduino:
         self.platform = platform
 
     def ConnectDevice(self):
+        #Change this into parameters
         succsess = False
         brate = 115200
         tout = 0
-        delay = 2
+        delay = 3
 
         if(self.platform == "win32"):
 
@@ -64,12 +65,13 @@ class Arduino:
                 return True   
 
             except: 
-                print("Unable to send data. Device most likely not connected ") 
+                print("Unable to send data. Device most likely not connected anymore") 
                 self.controller.close() 
                 return False       
         else:
             return False
 
+    #Read incomming data from the serial line
     def ReadData(self):
         if self.controller is not None:
             if(self.controller.inWaiting() > 0):
@@ -111,7 +113,6 @@ def GetSerialPorts():
 
     elif(platform == "linux"):
         ports = glob.glob("/dev/tty[A-Za-a]*")
-
         for port in ports:
             print(port)
         return

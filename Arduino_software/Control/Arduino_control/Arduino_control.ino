@@ -12,16 +12,12 @@ const byte firingServoPin = 6;
 const byte armingSignal = 7;
 const byte stepperDirection = 9;
 const byte stepperPulse = 10;
-//const byte stepperPin1 = 10;
-//const byte stepperPin2 = 11;
-//const byte stepperPin3 = 12;
-//const byte stepperPin4 = 13;
 
 //Analog Inputs
 int potmeter = A0;
 
 //Global boolean values
-bool headlessMode = true;       //Preferable to short this / make it a digital input
+bool headlessMode = false;       //Preferable to short this / make it a digital input
 bool manualMode = false;
 bool escCalibrated = false;
 bool connectBattery = true;   
@@ -45,10 +41,6 @@ const int BACKWARD = 1600;
 const int FORWARD = 1400;
 const int NEUTRAL = 1500;
 
-//Stepper setup
-//Number of steps per internal motor revolution 
-//const float STEPS_PER_REV = 32; 
- 
 //Amount of Gear Reduction
 const float GEAR_RED = 4;//0.25;
  
@@ -57,12 +49,9 @@ const int FULL_STEPS = 200;
 
 //Half steps
 const int HALF_STEPS = 400;
-
-//Number of steps per geared output rotation
-//const float STEPS_PER_OUT_REV = STEPS_PER_REV * GEAR_RED;
  
 //Number of steps to turn one degree
-const float STEPS_PER_DEG_OUT_REV = float((HALF_STEPS / float(360)) * GEAR_RED); // / float(360);
+const float STEPS_PER_DEG_OUT_REV = float((HALF_STEPS / float(360)) * GEAR_RED);
 
 //Integer value for turning one degree
 const int StepOneDeg = STEPS_PER_DEG_OUT_REV;
@@ -82,6 +71,8 @@ volatile int stepperPosition = 0;
 //Resets the target value
 volatile bool resetTarget = false;
 
+volatile bool stepperCalibrated = false;
+
 //Compensate for float to int conversion
 int additionalSteps = 0;
 
@@ -99,6 +90,11 @@ void setup()
 {
 
     FiringServo.attach(firingServoPin);
+
+    //Make sure the loading servo is in the right position
+    FiringServo.writeMicroseconds(FORWARD);
+    delay(700);    
+    FiringServo.writeMicroseconds(NEUTRAL);
 
     //Attach servo objects to pins
     ESC1.attach(esc1Pin);
@@ -270,7 +266,7 @@ void loop()
                 //Don't run stepper if it isn't homed       
                 if(resetTarget) runStepper = false, resetTarget = false;
 
-                ESC1.writeMicroseconds(1050);
+                ESC1.writeMicroseconds(1250);
                 
                 if(runStepper) setStepper(steps);
 
@@ -314,7 +310,6 @@ void loop()
 
                     //Sets the motorspeed
                     //if((motorSpeed >= lowerESCLimit) && (motorSpeed <= highestESCLimit)) setMotorSpeed(1050);
-                    //setMotorSpeed(1050);
 
                     //Turns the stepper in target direction
                     if((degrees >= lowerDegreesLimit) && (degrees <= highestDegreesLimit))
@@ -335,13 +330,10 @@ void loop()
 //Target given in steps
 void setStepper(int target)
 {    
-    //Serial.print("Stepper target: ");
-    //Serial.println(target + additionalSteps);
-
     //Sets stepper direction
-    if (target + additionalSteps < stepperPosition) digitalWrite(stepperDirection, LOW), stepperPosition--;  
+    if (target + additionalSteps < stepperPosition) digitalWrite(stepperDirection, HIGH), stepperPosition--;  
        
-    else if (target + additionalSteps > stepperPosition) digitalWrite(stepperDirection, HIGH), stepperPosition++;    
+    else if (target + additionalSteps > stepperPosition) digitalWrite(stepperDirection, LOW), stepperPosition++;    
 
     //Moves one step
     if((target + additionalSteps) != stepperPosition) moveStepper();
@@ -359,7 +351,7 @@ void setMotorSpeed(int targetValue)
         if(manualMode)
         {
             //int speedValue = map(analogRead(potmeter), 0 , 1024, lowerESCLimit, highestESCLimit);
-            int speedValue = 1050;
+            int speedValue = 1250;
             ESC1.writeMicroseconds(speedValue);
 
             if(millis() - previousMillis >= printDelay)
@@ -398,21 +390,18 @@ void calibrateESC()
         
         //Set minimum range for ESC
         ESC1.writeMicroseconds(lowerESCLimit);
-        //ESC2.writeMicroseconds(lowerESCLimit);
 
         //Allow the ESC to registrer new min value
         delay(1000);
 
         //Set maximum range for ESC
         ESC1.writeMicroseconds(highestESCLimit);
-        //ESC2.writeMicroseconds(highestESCLimit);
 
         //Allow the ESC to registrer new max value
         delay(10);
         
         //Sets ESC to minimum speed
         ESC1.writeMicroseconds(lowerESCLimit);
-        //ESC2.writeMicroseconds(lowerESCLimit);
 
         delay(5000);
 
@@ -426,21 +415,31 @@ void calibrateESC()
 
 void calibrateStepper()
 {   
-    //Go left until limit switch is hit     
+    //Go counter clock wise until limit switch is hit  
+    digitalWrite(stepperDirection, LOW);
+
+    int numberOfSteps = 50;   
+
+    for(int i = 0; i < numberOfSteps; i++) moveStepper();   
+
+    digitalWrite(stepperDirection, HIGH);
+
     while(!resetTarget) moveStepper();
+
+    stepperCalibrated = true;   
 }
 
 
 //ISR function
 void stepperLimit()
-{
+{   
     //De-bounce
-    if((millis() - lastInterrupLimitSwitch) > 50)
+    if((millis() - lastInterrupLimitSwitch) > 200)
     {
+        if(!stepperCalibrated) resetTarget = true;
         stepperPosition = 0;
-        resetTarget = true;
         lastInterrupLimitSwitch = millis();
-    }    
+    } 
 }
 
 void moveStepper()
@@ -450,14 +449,13 @@ void moveStepper()
     digitalWrite(stepperPulse, LOW);
 }
 
+//Load a new puck 
 void loadPuck()
 {
-    //Move servo all the way back and load new puck
     FiringServo.writeMicroseconds(BACKWARD);
-    delay(550);
-    //Limit switch trigger
+    delay(700);
     FiringServo.writeMicroseconds(FORWARD);
-    delay(600);    
+    delay(700);    
     FiringServo.writeMicroseconds(NEUTRAL);
     puckLoaded = true;
 }

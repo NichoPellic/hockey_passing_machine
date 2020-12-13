@@ -13,12 +13,12 @@ yoloTiny = True
 enableCuda = True
 controllerConnected = False
 
-confidenceThreshold = 0.5
-nmsThreshold = 0.3
-lastxValue = 0
-videoHeight = 720
-videoWidht = 1280
-xValueDeadzone = 10 #Allows the target to move without updating coordinate values
+confidenceThreshold = 0.5       #
+nmsThreshold = 0.3              #
+lastxValue = 0                  #Last coordinate value
+videoHeight = 720               #Values for displayed image
+videoWidht = 1280               #Values for displayed image
+xValueDeadzone = 10             #Allows the target to move without updating coordinate values
 
 #Connect to the controller
 arduino = SerialDevice.Arduino()
@@ -64,7 +64,7 @@ except:
 #Add this into a loop as the program will not function without a camera
 try:
     #Always defaults to the first camera
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(2)
 except:
     print("Unable to connect to camera")
 
@@ -106,12 +106,20 @@ def findObjects(outputs, img, lastxValue):
                 confValues.append(float(confidence))
 
     #Checks if the object has moved enough to update the control data sent to the stepper
-    #Add check to see if the target is a person
-    #Need to convert qthe xValue into degrees
+    #Need to convert the xValue into degrees
     if(controllerConnected):
         if(((lastxValue - xValueDeadzone) > xValue) or ((lastxValue + xValueDeadzone) < xValue)):
             if(xValue != 0):
-                arduino.SendData(support_functions.MapValue(xValue, 0, videoWidht, 0, 180))
+
+                sendValue = support_functions.MapValue(xValue, 0, videoWidht, 60, 0)
+
+                if(sendValue < 10):
+                    sendValue = 0
+
+                elif(sendValue > 50):
+                    sendValue = 60
+
+                arduino.SendData(sendValue)
                 lastxValue = xValue   
 
         if(arduino.ReadData() != ""):
